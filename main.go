@@ -10,6 +10,7 @@ import (
 	"regexp"
 
 	_ "github.com/lib/pq"
+	"golang.org/x/crypto/bcrypt"
 )
 
 const (
@@ -25,10 +26,20 @@ type Page struct {
 	Body  []byte
 }
 
+/*
+	Look into this:
+
+	Da path is: /favicon.ico
+	Shiet
+
+*/
+
 func homeHandler(w http.ResponseWriter, r *http.Request, title string) {
 	p := &Page{Title: title, Body: []byte("Welcome to Keto Cookout")}
 	renderTemplate(w, "home", p)
 }
+
+var userPasswordPepper = "I-LiKe-ChEeZe1234"
 
 func signupHandler(w http.ResponseWriter, r *http.Request, title string) {
 
@@ -40,22 +51,42 @@ func signupHandler(w http.ResponseWriter, r *http.Request, title string) {
 
 		username := r.FormValue("username")
 		password := r.FormValue("password")
+		email := r.FormValue("email")
+
+		if password == "" {
+			fmt.Fprintf(w, "A password is required\n")
+			return
+		}
+
+		passwordBytes := []byte(password + userPasswordPepper)
+
+		hashedBytes, err := bcrypt.GenerateFromPassword(passwordBytes, bcrypt.DefaultCost)
+		if err != nil {
+			fmt.Fprintf(w, "something went wrong: %s\n", err.Error())
+			return
+		}
+
+		password = ""
+		var passwordHash = string(hashedBytes)
 
 		fmt.Fprintf(w, "Yay you submitted the form\n\n")
 
 		fmt.Fprintf(w, "Username = %s\n", username)
-		fmt.Fprintf(w, "Password = %s\n", password)
+		// fmt.Fprintf(w, "Password = %s\n", password)
+		fmt.Fprintf(w, "Email = %s\n", email)
 
 		sqlStatement := `
-		INSERT INTO users (username, password)
-		VALUES ($1, $2)
+		INSERT INTO users (username, password_hash, email)
+		VALUES ($1, $2, $3)
 		RETURNING id`
 		id := 0
-		err := db.QueryRow(sqlStatement, username, password).Scan(&id)
+		err = db.QueryRow(sqlStatement, username, passwordHash, email).Scan(&id)
 		if err != nil {
 			panic(err)
 		}
 		fmt.Fprintf(w, "New record ID is: %d\n", id)
+
+		// redirect to user's dashboard
 
 		return
 	}
@@ -77,6 +108,8 @@ var validPath = regexp.MustCompile("^/(|signup)/?$")
 
 func makeHandler(fn func(http.ResponseWriter, *http.Request, string)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+
+		fmt.Println("Da path is:", r.URL.Path)
 
 		m := validPath.FindStringSubmatch(r.URL.Path)
 		if m == nil {
