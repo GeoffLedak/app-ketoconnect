@@ -1,11 +1,23 @@
 package main
 
 import (
+	"database/sql"
+	_ "database/sql"
 	"fmt"
 	"html/template"
 	"log"
 	"net/http"
 	"regexp"
+
+	_ "github.com/lib/pq"
+)
+
+const (
+	host     = "localhost"
+	port     = 5432
+	user     = "postgres"
+	password = "your-password"
+	dbname   = "ketoconnect"
 )
 
 type Page struct {
@@ -21,8 +33,19 @@ func homeHandler(w http.ResponseWriter, r *http.Request, title string) {
 func signupHandler(w http.ResponseWriter, r *http.Request, title string) {
 
 	if r.Method == "POST" {
-		fmt.Println("Posty post")
-		fmt.Fprintln(w, "Yay you submitted the form")
+
+		if err := r.ParseForm(); err != nil {
+			panic("error parsing signup form. " + err.Error())
+		}
+
+		username := r.FormValue("username")
+		password := r.FormValue("password")
+
+		fmt.Fprintf(w, "Yay you submitted the form\n\n")
+
+		fmt.Fprintf(w, "Username = %s\n", username)
+		fmt.Fprintf(w, "Password = %s\n", password)
+
 		return
 	}
 
@@ -56,6 +79,32 @@ func makeHandler(fn func(http.ResponseWriter, *http.Request, string)) http.Handl
 }
 
 func main() {
+
+	psqlInfo := fmt.Sprintf("host=%s port=%d user=%s "+
+		"password=%s dbname=%s sslmode=disable",
+		host, port, user, password, dbname)
+	db, err := sql.Open("postgres", psqlInfo)
+	if err != nil {
+		panic(err)
+	}
+	defer db.Close()
+
+	err = db.Ping()
+	if err != nil {
+		panic(err)
+	}
+
+	sqlStatement := `
+	INSERT INTO users (username, password)
+	VALUES ($1, $2)
+	RETURNING id`
+	id := 0
+	err = db.QueryRow(sqlStatement, "ChEeZeBaLL", "gogo").Scan(&id)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println("New record ID is:", id)
+
 	http.HandleFunc("/", makeHandler(homeHandler))
 	http.HandleFunc("/signup/", makeHandler(signupHandler))
 
