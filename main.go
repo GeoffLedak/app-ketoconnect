@@ -46,6 +46,17 @@ func signupHandler(w http.ResponseWriter, r *http.Request, title string) {
 		fmt.Fprintf(w, "Username = %s\n", username)
 		fmt.Fprintf(w, "Password = %s\n", password)
 
+		sqlStatement := `
+		INSERT INTO users (username, password)
+		VALUES ($1, $2)
+		RETURNING id`
+		id := 0
+		err := db.QueryRow(sqlStatement, username, password).Scan(&id)
+		if err != nil {
+			panic(err)
+		}
+		fmt.Fprintf(w, "New record ID is: %d\n", id)
+
 		return
 	}
 
@@ -78,12 +89,17 @@ func makeHandler(fn func(http.ResponseWriter, *http.Request, string)) http.Handl
 	}
 }
 
+var db *sql.DB
+
 func main() {
 
 	psqlInfo := fmt.Sprintf("host=%s port=%d user=%s "+
 		"password=%s dbname=%s sslmode=disable",
 		host, port, user, password, dbname)
-	db, err := sql.Open("postgres", psqlInfo)
+
+	var err error
+
+	db, err = sql.Open("postgres", psqlInfo)
 	if err != nil {
 		panic(err)
 	}
@@ -93,17 +109,6 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-
-	sqlStatement := `
-	INSERT INTO users (username, password)
-	VALUES ($1, $2)
-	RETURNING id`
-	id := 0
-	err = db.QueryRow(sqlStatement, "ChEeZeBaLL", "gogo").Scan(&id)
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println("New record ID is:", id)
 
 	http.HandleFunc("/", makeHandler(homeHandler))
 	http.HandleFunc("/signup/", makeHandler(signupHandler))
