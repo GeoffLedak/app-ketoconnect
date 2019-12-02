@@ -8,6 +8,7 @@ import (
 	"log"
 	"net/http"
 	"regexp"
+	"strconv"
 
 	_ "github.com/lib/pq"
 	"golang.org/x/crypto/bcrypt"
@@ -24,6 +25,12 @@ const (
 type Page struct {
 	Title string
 	Body  []byte
+}
+
+type User struct {
+	username     string
+	passwordHash string
+	email        string
 }
 
 /*
@@ -86,6 +93,18 @@ func signupHandler(w http.ResponseWriter, r *http.Request, title string) {
 		}
 		fmt.Fprintf(w, "New record ID is: %d\n", id)
 
+		someUser := User{}
+
+		sqlStatement = `
+		SELECT * FROM users WHERE id = 
+		`
+		sqlStatement = sqlStatement + " " + strconv.Itoa(id)
+
+		err = db.QueryRow(sqlStatement, username, passwordHash, email).Scan(&someUser)
+		if err != nil {
+			panic(err)
+		}
+
 		// redirect to user's dashboard
 
 		return
@@ -95,16 +114,14 @@ func signupHandler(w http.ResponseWriter, r *http.Request, title string) {
 	renderTemplate(w, "signup", p)
 }
 
-var templates = template.Must(template.ParseFiles("home.html", "signup.html"))
-
-func renderTemplate(w http.ResponseWriter, template string, p *Page) {
-	err := templates.ExecuteTemplate(w, template+".html", p)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-	}
+func userhomeHandler(w http.ResponseWriter, r *http.Request, title string) {
+	p := &Page{Title: title, Body: []byte("You might be signed in")}
+	renderTemplate(w, "userhome", p)
 }
 
-var validPath = regexp.MustCompile("^/(|signup)/?$")
+// =====================================================================================================
+
+var validPath = regexp.MustCompile("^/(|signup|userhome)/?$")
 
 func makeHandler(fn func(http.ResponseWriter, *http.Request, string)) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -121,6 +138,46 @@ func makeHandler(fn func(http.ResponseWriter, *http.Request, string)) http.Handl
 		fn(w, r, "some title")
 	}
 }
+
+var templates = template.Must(template.ParseFiles("home.html", "signup.html", "userhome.html"))
+
+func renderTemplate(w http.ResponseWriter, template string, p *Page) {
+	err := templates.ExecuteTemplate(w, template+".html", p)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+	}
+}
+
+// =====================================================================================================
+
+/*
+func findUserByUsername(username string) {
+
+	db.QueryRow
+
+}
+
+func authenticate(username, password string) (*User, error) {
+	foundUser, err := findUserByUsername(username)
+	if err != nil {
+		return nil, err
+	}
+
+	err = bcrypt.CompareHashAndPassword(
+		[]byte(foundUser.PasswordHash),
+		[]byte(password+userPasswordPepper))
+	switch err {
+	case nil:
+		return foundUser, nil
+	case bcrypt.ErrMismatchedHashAndPassword:
+		return nil, ErrInvalidPassword
+	default:
+		return nil, err
+	}
+}
+*/
+
+// =====================================================================================================
 
 var db *sql.DB
 
@@ -145,6 +202,7 @@ func main() {
 
 	http.HandleFunc("/", makeHandler(homeHandler))
 	http.HandleFunc("/signup/", makeHandler(signupHandler))
+	http.HandleFunc("/userhome/", makeHandler(userhomeHandler))
 
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
