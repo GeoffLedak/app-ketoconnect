@@ -26,6 +26,12 @@ type Page struct {
 	Body  []byte
 }
 
+type User struct {
+	username     string
+	passwordHash string
+	email        string
+}
+
 /*
 	Look into this:
 
@@ -72,7 +78,6 @@ func signupHandler(w http.ResponseWriter, r *http.Request, title string) {
 		fmt.Fprintf(w, "Yay you submitted the form\n\n")
 
 		fmt.Fprintf(w, "Username = %s\n", username)
-		// fmt.Fprintf(w, "Password = %s\n", password)
 		fmt.Fprintf(w, "Email = %s\n", email)
 
 		sqlStatement := `
@@ -85,6 +90,18 @@ func signupHandler(w http.ResponseWriter, r *http.Request, title string) {
 			panic(err)
 		}
 		fmt.Fprintf(w, "New record ID is: %d\n", id)
+
+		sqlStatement = `SELECT id, email FROM users WHERE id=$1;`
+
+		row := db.QueryRow(sqlStatement, id)
+		switch err := row.Scan(&id, &email); err {
+		case sql.ErrNoRows:
+			fmt.Println("No rows were returned!")
+		case nil:
+			fmt.Println(id, email)
+		default:
+			panic(err)
+		}
 
 		// redirect to user's dashboard
 
